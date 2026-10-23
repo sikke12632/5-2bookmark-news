@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>책갈피 어린이 신문</title>
+<link rel="stylesheet" href="style.css?v=1">
+</head>
+<body>
+<div id="stage">
+
+  <!-- 벽: 창밖 마을, 기자, 막대, 시계 -->
+  <section id="wall">
+    <div id="board">
+      <div id="dayLabel">첫째 날</div>
+      <div id="bars"></div>
+    </div>
+    <div id="window"><div id="village"></div><div class="frame"></div></div>
+    <div id="reporter"><div id="face"></div><div id="nameTag"></div></div>
+    <div id="bubble"></div>
+    <div id="clock">
+      <svg viewBox="0 0 160 160">
+        <circle cx="80" cy="80" r="74" class="rim"/>
+        <circle cx="80" cy="80" r="66" class="face"/>
+        <path id="deadline" class="deadline"/>
+        <g id="marks"></g>
+        <line id="hHand" x1="80" y1="80" x2="80" y2="44" class="hh"/>
+        <line id="mHand" x1="80" y1="80" x2="80" y2="26" class="mh"/>
+        <circle cx="80" cy="80" r="5" fill="#2a211b"/>
+      </svg>
+      <div class="clockLabel">마감 12시</div>
+    </div>
+    <button id="soundBtn" class="ibtn off" aria-label="소리">
+      <svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path class="wave" d="M16 8q3 4 0 8" fill="none" stroke-width="2"/><path class="cross" d="M16 9l5 6M21 9l-5 6" fill="none" stroke-width="2"/></svg>
+    </button>
+  </section>
+
+  <!-- 책상 -->
+  <section id="desk">
+    <div id="ruleNote" class="tool"><div class="pin"></div><b>오늘의 규칙</b><p id="ruleText"></p></div>
+    <div id="notebook" class="tool"><div class="nbCover"><b>맞춤법 수첩</b><span>콕 눌러 펼치기</span></div></div>
+    <div id="slip"></div>
+
+    <div id="paperSlot"></div>
+
+    <div id="stamps">
+      <button class="stamp" data-k="print"><span class="handle"></span><span class="rubber">싣는다</span></button>
+      <button class="stamp" data-k="fix"><span class="handle"></span><span class="rubber">고쳐 오라</span></button>
+      <button class="stamp" data-k="cut"><span class="handle"></span><span class="rubber">뺀다</span></button>
+    </div>
+    <div id="tip"></div>
+  </section>
+
+  <!-- 겹쳐 뜨는 화면 -->
+  <div id="overlay" class="hide"><div id="sheet"></div></div>
+</div>
+
+<script src="js/data.js?v=1"></script>
+<script src="js/art.js?v=1"></script>
+<script src="js/sound.js?v=1"></script>
+<script src="js/main.js?v=1"></script>
+</body>
+</html>
