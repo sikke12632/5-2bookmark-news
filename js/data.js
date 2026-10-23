@@ -196,13 +196,13 @@ NEWS.crises = {
 
 // 엔딩 (서른째 날이 끝나면 위에서부터 맞는 것 하나)
 NEWS.endings = [
-  { id: 'gold', name: '황금 펜 편집장', text: '한 달 동안 틀린 곳을 거의 다 찾아냈어요. 마을 사람들이 황금 펜을 선물했어요!', hidden: true, test: (b, acc) => acc >= 0.9 && b.trust >= 70 },
+  { id: 'gold', name: '황금 펜 편집장', text: '편집장으로 일하는 동안 틀린 곳을 거의 다 찾아냈어요. 마을 사람들이 황금 펜을 선물했어요!', hidden: true, test: (b, acc) => acc >= 0.9 && b.trust >= 70 },
   { id: 'rumor', name: '소문만 무성한 신문', text: '신문은 많이 팔렸지만, 마을 사람들은 "믿을 수가 없어"라고 해요.', test: (b) => b.trust < 35 },
-  { id: 'broke', name: '문 닫을 뻔한 신문사', text: '살림이 너무 어려워서 신문사 문을 닫을 뻔했어요. 다음 달에는 꼭 살림을 챙겨요!', test: (b) => b.money < 20 },
+  { id: 'broke', name: '문 닫을 뻔한 신문사', text: '살림이 너무 어려워서 신문사 문을 닫을 뻔했어요. 다음 판에는 꼭 살림을 챙겨요!', test: (b) => b.money < 20 },
   { id: 'trust', name: '마을이 믿는 신문', text: '"책갈피 신문에 났으면 정말이야!" 마을 사람들이 신문을 믿고 읽어요.', test: (b) => b.trust >= 65 },
   { id: 'fun', name: '웃음 가득 신문', text: '아침마다 신문을 기다리는 사람들로 신문사 앞이 북적여요.', test: (b) => b.readers >= 70 },
   { id: 'happy', name: '기자들이 행복한 신문사', text: '기자들이 신이 나서 날마다 새 소식을 물어 와요.', test: (b) => b.heart >= 70 },
-  { id: 'steady', name: '꾸준한 동네 신문', text: '한 달 동안 하루도 빠짐없이 신문을 냈어요. 마을의 든든한 친구예요.', test: () => true },
+  { id: 'steady', name: '꾸준한 동네 신문', text: '하루도 빠짐없이 신문을 냈어요. 마을의 든든한 친구예요.', test: () => true },
 ];
 
 // 난이도: 원고 한 장에 주는 실제 초, 틀린 곳 개수 알려 주기

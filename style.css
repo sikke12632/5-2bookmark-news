@@ -340,3 +340,21 @@ body.evening .sun { fill: #ff7a4a; }
 .endText.small { font-size: 16px; color: #6a5a4a; }
 .endStats { display: flex; justify-content: center; gap: 18px; font-size: 17px; flex-wrap: wrap; margin-bottom: 8px; }
 .saved { font-size: 14px; color: #6a7a5a; margin: 10px 0 0; }
+
+/* 게임 길이 고르기 */
+.pickT { font-family: 'JKTitle', serif; font-weight: normal; font-size: 20px; margin: 4px 0 8px; text-align: center; color: #5a4a3a; }
+.levels.modes .lv { width: 190px; text-align: center; }
+.levels.modes .lv span { display: block; margin-top: 2px; }
+.levels { margin-bottom: 16px; }
+
+/* 건너뛴 날의 규칙 */
+.skipped { text-align: left; background: #fff1ec; border-left: 6px solid var(--red); border-radius: 6px; padding: 10px 16px; margin: 0 10px 14px; font-size: 16px; line-height: 1.5; }
+.skipped b { color: #a3402e; }
+.skipped ul { margin: 4px 0 2px; padding-left: 20px; }
+.skipped span { font-size: 14px; color: #8a6a5a; }
+.morning.compact h2 { font-size: 28px; }
+.morning.compact .date { margin-bottom: 10px; }
+.morning.compact .letters, .morning.compact .skipped { font-size: 15px; padding: 8px 14px; margin-bottom: 10px; }
+.morning.compact .letters p { margin-top: 2px; }
+.morning.compact .note { font-size: 19px; padding: 14px; margin-bottom: 12px; }
+.morning.compact .newtool { margin: -4px 0 10px; font-size: 15px; }

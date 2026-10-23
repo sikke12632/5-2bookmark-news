@@ -1,16 +1,18 @@
-// 서른 날을 끝까지 자동으로 해 본다. node tools/cdp.mjs tools/play-all.mjs <서버주소> <모드> <캡처폴더>
+// 한 판을 끝까지 자동으로 해 본다. node tools/cdp.mjs tools/play-all.mjs <서버주소> <모드> <캡처폴더> <길이: 5|10|20|30>
 //   모드 perfect: 정답대로 / mixed: 열에 일곱만 정답 / sloppy: 다 「싣는다」 (위기·엔딩 확인용)
 export const options = { width: 1366, height: 768 };
 const URL = process.argv[3] || 'http://127.0.0.1:8650/';
 const MODE = process.argv[4] || 'perfect';
 const OUT = process.argv[5] || '';
+const LEN = +(process.argv[6] || 30);
 export default async function (t) {
   await t.goto(URL); await t.sleep(600);
   await t.eval(`localStorage.clear()`);
   await t.goto(URL); await t.sleep(600);
-  await t.eval(`document.querySelector('.lv[data-lv=hard]').click(); document.getElementById('go').click()`);
+  await t.eval(`document.querySelector('.lv.mode[data-l="${LEN}"]').click(); document.querySelector('.lv[data-lv=hard]').click(); document.getElementById('go').click()`);
   const crises = [];
-  for (let day = 1; day <= 30; day++) {
+  const plan = [];
+  for (let day = 1; day <= LEN; day++) {
     await t.waitFor(`document.getElementById('ok') || document.getElementById('ca')`);
     if (await t.eval(`!!document.getElementById('ca')`)) {
       if (OUT && !crises.length) await t.shot(`${OUT}/위기-${MODE}.png`);
@@ -46,12 +48,13 @@ export default async function (t) {
     await t.sleep(300);
     const score = await t.eval(`document.querySelector('.score').textContent`);
     const bars = await t.eval(`JSON.stringify(__news.S.bars)`);
-    console.log(`${day}일째 ${score} ${bars}`);
-    if (OUT && (day === 16 || day === 30)) await t.shot(`${OUT}/전체-${MODE}-${day}일째.png`);
-    if (day < 30) await t.eval(`document.getElementById('next').click()`);
+    plan.push(await t.eval(`__news.S.day.n`));
+    console.log(`${day}일째(원래 ${plan[plan.length - 1]}일째) ${score} ${bars}`);
+    if (day < LEN) await t.eval(`document.getElementById('next').click()`);
   }
   await t.eval(`document.getElementById('ending').click()`); await t.sleep(800);
+  console.log('뽑힌 날:', plan.join(','));
   console.log('엔딩:', await t.eval(`document.querySelector('.endStamp').textContent`));
   if (crises.length) console.log('위기:', crises.join(', '));
-  if (OUT) await t.shot(`${OUT}/엔딩-${MODE}.png`);
+  if (OUT) await t.shot(`${OUT}/엔딩-${MODE}-${LEN}.png`);
 }

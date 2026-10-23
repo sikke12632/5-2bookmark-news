@@ -33,7 +33,7 @@
   const fresh = () => ({ trust: 50, readers: 50, heart: 50, money: 50 });
   const freshStats = () => ({ found: 0, total: 0, days: 0, perfect: 0 });
   const S = {
-    level: 'easy', di: 0, day: null, queue: [], idx: 0, cur: null, busy: true, practice: false,
+    level: 'easy', mode: 30, seed: 1, plan: [], gi: 0, prevN: 0, di: 0, day: null, queue: [], idx: 0, cur: null, busy: true, practice: false,
     bars: fresh(), start: 0, total: 0, running: false, lastTick: -1,
     log: [], delta: {},
     carry: [],      // 다음 날 책상에 다시 올 원고 {n, i} (고쳐 온 광고 등)
@@ -53,7 +53,7 @@
     const sv = load();
     if (!sv) return;
     sv.mid = {
-      di: S.di, startCarry: S.dayCarry, bars: S.bars, delta: S.delta, carry: S.carry, letters: S.letters,
+      gi: S.gi, startCarry: S.dayCarry, bars: S.bars, delta: S.delta, carry: S.carry, letters: S.letters,
       lastCrisis: S.lastCrisis, level: S.level,
       elapsed: Math.min(S.total, (performance.now() - S.start) / 1000),
       done: S.log.map((r) => ({ stamp: r.stamp, circled: [...(r.circled || [])] })),
@@ -63,8 +63,9 @@
   function saveProgress(next) {
     const old = load() || {};
     store({
+      mode: S.mode, seed: S.seed, plan: S.plan,
       next, level: S.level, bars: S.bars, carry: S.carry, prevFixed: S.prevFixed, letters: S.letters,
-      stats: S.stats, lastCrisis: S.lastCrisis, reached: Math.max(old.reached || 0, next), endings: old.endings || [],
+      stats: S.stats, lastCrisis: S.lastCrisis, reached: Math.max(old.reached || 0, S.plan[next - 1] + 1), endings: old.endings || [],
     });
   }
 
@@ -119,7 +120,7 @@
   // 그날까지 쌓인 기록부 (같은 이름은 나중 것으로 바뀐다)
   function ledgerAt(n) {
     const rows = new Map();
-    for (const d of daysUntil(n)) for (const [k, v] of d.ledger || []) rows.set(k, { v, isNew: d.n === n });
+    for (const d of daysUntil(n)) for (const [k, v] of d.ledger || []) rows.set(k, { v, isNew: d.n > S.prevN });
     return [...rows].map(([k, r]) => ({ k, ...r }));
   }
 
@@ -201,62 +202,137 @@
     $('#clock').classList.remove('hurry');
   }
 
+  // ── 게임 길이: 게임 속 몇 주인지 고르고, 그만큼 날을 뽑는다 ──
+  const MODES = [{ L: 5, w: 1 }, { L: 10, w: 2 }, { L: 20, w: 4 }, { L: 30, w: 6 }];
+  const modeOf = (L) => MODES.find((m) => m.L === L) || MODES[MODES.length - 1];
+  // 실제 걸리는 시간 어림: 원고 한 장 65초, 하루에 아침 회의·신문 보기 1분 30초
+  function estimate(L) {
+    const avg = NEWS.days.reduce((s, d) => s + d.items.length, 0) / NEWS.days.length;
+    const min = Math.round((L * avg * 65 + L * 90) / 60 / 5) * 5;
+    const h = Math.floor(min / 60), m = min % 60;
+    return '약 ' + (h ? `${h}시간${m ? ` ${m}분` : ''}` : `${m}분`);
+  }
+  // 씨앗이 같으면 늘 같은 순서가 나오는 난수 (이어 하기 때 같은 판을 다시 만들려고)
+  function rng(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  // 첫날은 늘 1일째, 마지막 날은 늘 30일째(송년 음악회). 그 사이는 구간마다 하루씩 무작위로
+  function makePlan(L, seed) {
+    const N = NEWS.days.length;
+    if (L >= N) return NEWS.days.map((d, i) => i);
+    const r = rng(seed), plan = [0], step = (N - 1) / (L - 1);
+    for (let g = 1; g < L - 1; g++) {
+      const top = N - 1 - (L - 1 - g);
+      const lo = Math.min(top, Math.max(plan[g - 1] + 1, Math.round(g * step - step / 2)));
+      const hi = Math.max(lo, Math.min(top, Math.round(g * step + step / 2) - 1));
+      plan.push(lo + Math.floor(r() * (hi - lo + 1)));
+    }
+    plan.push(N - 1);
+    return plan;
+  }
+  function shuffled(list, seed) {
+    const a = list.slice(), r = rng(seed);
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+  // 그날 원고: 어제 고쳐 오라 한 원고가 먼저, 나머지는 판마다 순서를 섞는다
+  function buildQueue(D, carry, seed) {
+    const carried = carry.map((r) => { const d = NEWS.days[dayIndexOf(r.n)]; return d && d.items[r.i] && d.items[r.i].revised; }).filter(Boolean);
+    return [...carried, ...shuffled(D.items, seed)];
+  }
+  // 예전(길이 고르기 전) 저장을 30일 판으로 읽는다
+  function migrate(sv) {
+    if (sv && !sv.plan) {
+      sv.mode = 30; sv.seed = 1; sv.plan = NEWS.days.map((d, i) => i);
+      if (sv.mid && sv.mid.gi === undefined) sv.mid.gi = sv.mid.di;
+    }
+    return sv;
+  }
+
   // ── 첫 화면 ──
   function title() {
     resetDesk();
     S.day = null;
-    const sv = load();
+    const sv = migrate(load());
     if (sv && sv.level) S.level = sv.level;
-    S.bars = sv && sv.next < NEWS.days.length ? { ...(sv.mid && sv.mid.di === sv.next ? sv.mid.bars : sv.bars) } : fresh();
+    const going = sv && sv.next < sv.plan.length;
+    const midHere = going && sv.mid && sv.mid.gi === sv.next;
+    S.bars = going ? { ...(midHere ? sv.mid.bars : sv.bars) } : fresh();
     drawBars();
-    const lv = Object.entries(NEWS.levels).map(([k, L]) =>
-      `<button class="lv${k === S.level ? ' on' : ''}" data-lv="${k}"><b>${L.name}</b><span>${L.desc}</span></button>`).join('');
-    const done = sv && sv.next >= NEWS.days.length;
-    const endN = sv && sv.endings ? sv.endings.length : 0;
-    let btns;
-    if (!sv) btns = '<button class="btn" id="go">편집장 자리에 앉기</button>';
-    else if (done) btns = `<p class="intro small">한 달 신문을 다 냈어요! 다른 엔딩도 찾아볼까요?</p><button class="btn" id="restart">처음부터 다시 하기</button>`;
-    else {
-      const mid = sv.mid && sv.mid.di === sv.next ? ` ${sv.mid.done.length + 1}번째 원고부터` : '';
-      btns = `<button class="btn" id="cont">이어 하기 · ${dayName(NEWS.days[sv.next].n)}${mid}</button> <button class="btn gray" id="restart">처음부터</button>`;
-    }
-    const anyPast = ALL || (sv && sv.reached > 0);
+    if (!going) { setup(sv); return; }
+    const M = modeOf(sv.mode);
+    const endN = (sv.endings || []).length;
     sheet(`
       <div style="width:780px">
-        <div class="masthead"><h1>책갈피 어린이 신문</h1><div class="sub"><span>책갈피 마을 소식을 전해요</span><span>${sv ? `지금까지 ${Math.min(sv.next, NEWS.days.length)}호를 냈어요` : '편집장 자리가 비어 있어요'}</span></div></div>
-        <p class="intro">기자들이 가져온 원고를 읽고, <b>틀린 곳을 콕 찍은 다음</b> 도장을 쾅 찍어 주세요.<br>마감 시계가 12시를 가리키면 그날 신문을 찍어요.</p>
-        <div class="levels">${lv}</div>
-        <div class="center">${btns}</div>
+        <div class="masthead"><h1>책갈피 어린이 신문</h1><div class="sub"><span>책갈피 마을 소식을 전해요</span><span>게임 속 ${M.w}주 판 · ${sv.next}호까지 냈어요</span></div></div>
+        <p class="intro">하던 판을 이어서 할까요?</p>
+        <div class="center"><button class="btn" id="cont">이어 하기 · ${dayName(sv.next + 1)}${midHere ? ` ${sv.mid.done.length + 1}번째 원고부터` : ''}</button>
+          <button class="btn gray" id="newRun">새 판 시작</button></div>
         <div class="titleFoot">
-          ${anyPast ? '<button class="link" id="past">지난 날 다시 해 보기 (연습)</button>' : '<span></span>'}
+          <button class="link" id="past">지난 날 다시 해 보기 (연습)</button>
           <button class="link" id="ends">엔딩 모음 ${endN} / ${NEWS.endings.length}</button>
         </div>
       </div>`);
-    $$('.lv').forEach((b) => b.onclick = () => {
-      S.level = b.dataset.lv;
-      $$('.lv').forEach((x) => x.classList.toggle('on', x === b));
-    });
-    const begin = () => {
-      const keepEnds = (load() || {}).endings || [];
-      Object.assign(S, { bars: fresh(), carry: [], prevFixed: [], letters: [], stats: freshStats(), practice: false, lastCrisis: -9 });
-      store({ next: 0, level: S.level, bars: S.bars, carry: [], prevFixed: [], letters: [], stats: S.stats, reached: (load() || {}).reached || 0, endings: keepEnds });
-      drawBars();
-      startDay(0);
-    };
-    if ($('#go')) $('#go').onclick = begin;
-    if ($('#cont')) $('#cont').onclick = () => {
-      if (sv.mid && sv.mid.di === sv.next) { resumeMid(sv); return; }
+    $('#cont').onclick = () => {
+      Object.assign(S, { mode: sv.mode, seed: sv.seed, plan: sv.plan, level: sv.level || S.level });
+      if (midHere) { resumeMid(sv); return; }
       Object.assign(S, { bars: { ...sv.bars }, carry: sv.carry || [], prevFixed: sv.prevFixed || [], letters: sv.letters || [], stats: sv.stats || freshStats(), practice: false, lastCrisis: sv.lastCrisis ?? -9 });
       drawBars();
       startDay(sv.next);
     };
-    if ($('#restart')) {
-      let armed = false;
-      $('#restart').onclick = (e) => {
-        if (!armed && !done) { armed = true; e.target.textContent = '한 번 더 누르면 기록이 지워져요'; return; }
-        begin();
-      };
-    }
+    $('#newRun').onclick = () => setup(sv, true);
+    $('#past').onclick = pastDays;
+    $('#ends').onclick = endingsPage;
+  }
+
+  // 새 판: 게임 길이와 난이도 고르기
+  let pickL = 5;
+  function setup(sv, overwrite) {
+    const finished = sv && sv.next >= sv.plan.length;
+    const modes = MODES.map((m) => `<button class="lv mode${m.L === pickL ? ' on' : ''}" data-l="${m.L}"><b>게임 속 ${m.w}주</b><span>신문 ${m.L}호${m.L === 30 ? ' (전체)' : ''}<br>실제 시간 ${estimate(m.L)}</span></button>`).join('');
+    const lv = Object.entries(NEWS.levels).map(([k, L]) =>
+      `<button class="lv${k === S.level ? ' on' : ''}" data-lv="${k}"><b>${L.name}</b><span>${L.desc}</span></button>`).join('');
+    const endN = sv && sv.endings ? sv.endings.length : 0;
+    sheet(`
+      <div style="width:860px">
+        <div class="masthead"><h1>책갈피 어린이 신문</h1><div class="sub"><span>책갈피 마을 소식을 전해요</span><span>${finished ? '지난 판을 끝냈어요! 다른 엔딩도 찾아볼까요?' : '편집장 자리가 비어 있어요'}</span></div></div>
+        <p class="intro small">기자들이 가져온 원고를 읽고, <b>틀린 곳을 콕 찍은 다음</b> 도장을 쾅 찍어 주세요. 판마다 나오는 날과 기사 순서가 달라져요.</p>
+        <h3 class="pickT">게임 길이</h3>
+        <div class="levels modes">${modes}</div>
+        <h3 class="pickT">난이도</h3>
+        <div class="levels">${lv}</div>
+        <div class="center"><button class="btn" id="go">${overwrite ? '새 판 시작 (하던 판은 지워져요)' : '편집장 자리에 앉기'}</button>${overwrite ? ' <button class="btn gray" id="back">돌아가기</button>' : ''}</div>
+        <div class="titleFoot">
+          ${ALL || (sv && sv.reached > 0) ? '<button class="link" id="past">지난 날 다시 해 보기 (연습)</button>' : '<span></span>'}
+          <button class="link" id="ends">엔딩 모음 ${endN} / ${NEWS.endings.length}</button>
+        </div>
+      </div>`);
+    $$('.lv.mode').forEach((b) => b.onclick = () => {
+      pickL = +b.dataset.l;
+      $$('.lv.mode').forEach((x) => x.classList.toggle('on', x === b));
+    });
+    $$('.lv[data-lv]').forEach((b) => b.onclick = () => {
+      S.level = b.dataset.lv;
+      $$('.lv[data-lv]').forEach((x) => x.classList.toggle('on', x === b));
+    });
+    $('#go').onclick = () => {
+      const old = load() || {};
+      const seed = Math.floor(Math.random() * 2 ** 31);
+      Object.assign(S, {
+        mode: pickL, seed, plan: makePlan(pickL, seed),
+        bars: fresh(), carry: [], prevFixed: [], letters: [], stats: freshStats(), practice: false, lastCrisis: -9,
+      });
+      store({ mode: S.mode, seed, plan: S.plan, next: 0, level: S.level, bars: S.bars, carry: [], prevFixed: [], letters: [], stats: S.stats, reached: old.reached || 0, endings: old.endings || [] });
+      drawBars();
+      startDay(0);
+    };
+    if ($('#back')) $('#back').onclick = title;
     if ($('#past')) $('#past').onclick = pastDays;
     $('#ends').onclick = endingsPage;
   }
@@ -264,16 +340,17 @@
   // 지난 날 고르기 (연습: 저장하지 않는다)
   function pastDays() {
     const sv = load() || {};
-    const reach = ALL ? NEWS.days.length : Math.min(NEWS.days.length, (sv.reached || 0) + 0);
+    const reach = ALL ? NEWS.days.length : Math.min(NEWS.days.length, sv.reached || 0);
     const grid = NEWS.days.map((d, i) => `<button class="dayBtn" data-i="${i}"${i < reach ? '' : ' disabled'}><b>${d.n}</b><span>${dateOf(d.n).replace(/요일$/, '')}</span></button>`).join('');
     sheet(`<div style="width:760px"><h2 class="pageT">지난 날 다시 해 보기</h2>
-      <p class="intro small">연습은 기록에 남지 않아요. 막대도 가운데에서 시작해요.</p>
+      <p class="intro small">한 번 해 본 날을 골라 연습해요. 연습은 기록에 남지 않고, 막대도 가운데에서 시작해요.</p>
       <div class="dayGrid">${grid}</div>
       <div class="center"><button class="btn gray" id="back">돌아가기</button></div></div>`);
     $$('.dayBtn').forEach((b) => b.onclick = () => {
-      Object.assign(S, { bars: fresh(), carry: [], prevFixed: [], letters: [], stats: freshStats(), practice: true });
+      const seed = Math.floor(Math.random() * 2 ** 31);
+      Object.assign(S, { mode: 1, seed, plan: [+b.dataset.i], bars: fresh(), carry: [], prevFixed: [], letters: [], stats: freshStats(), practice: true });
       drawBars();
-      startDay(+b.dataset.i);
+      startDay(0);
     });
     $('#back').onclick = title;
   }
@@ -288,21 +365,27 @@
     $('#back').onclick = title;
   }
 
-  // ── 하루 시작: 위기 → 아침 회의 ──
-  function startDay(di) {
-    const D = NEWS.days[di];
-    resetDesk();
-    const letters = S.letters;
-    S.letters = [];
-    const carried = S.carry.map((r) => { const d = NEWS.days[dayIndexOf(r.n)]; return d && d.items[r.i] && d.items[r.i].revised; }).filter(Boolean);
-    Object.assign(S, { di, day: D, queue: [...carried, ...D.items], idx: 0, log: [], delta: {}, busy: true, dayCarry: S.carry, carry: [] });
-    $('#dayLabel').innerHTML = `${dayName(D.n)}<small>${dateOf(D.n)}</small>`;
+  // 오늘 판의 몇째 날인지, 지난번에 한 날은 몇 일째였는지
+  function enterDay(gi) {
+    const di = S.plan[gi], D = NEWS.days[di];
+    Object.assign(S, { gi, di, day: D, prevN: S.practice ? D.n - 1 : gi ? NEWS.days[S.plan[gi - 1]].n : 0 });
+    $('#dayLabel').innerHTML = S.practice ? `${D.n}일째 연습<small>${dateOf(D.n)}</small>` : `${dayName(gi + 1)}<small>${dateOf(D.n)}</small>`;
     drawRules();
     $('#ledger').classList.toggle('hide', D.n < NEWS.ledgerFrom);
+    return D;
+  }
 
-    // 막대가 바닥이면 위기 사건부터
+  // ── 하루 시작: 위기 → 아침 회의 ──
+  function startDay(gi) {
+    resetDesk();
+    const D = enterDay(gi);
+    const letters = S.letters;
+    S.letters = [];
+    Object.assign(S, { queue: buildQueue(D, S.carry, S.seed + gi * 101), idx: 0, log: [], delta: {}, busy: true, dayCarry: S.carry, carry: [] });
+
+    // 막대가 바닥이면 위기 사건부터 (사흘에 한 번까지만)
     const low = BARS.map(([k]) => k).filter((k) => S.bars[k] <= NEWS.crisisAt).sort((a, b) => S.bars[a] - S.bars[b])[0];
-    if (low && !S.practice && D.n - S.lastCrisis >= 3) { S.lastCrisis = D.n; crisis(low, () => morning(D, letters)); }
+    if (low && !S.practice && gi - S.lastCrisis >= 3) { S.lastCrisis = gi; crisis(low, () => morning(D, letters)); }
     else morning(D, letters);
   }
 
@@ -321,21 +404,26 @@
   }
 
   function morning(D, letters) {
-    const newLedger = D.n === NEWS.ledgerFrom;
-    const ledgerNews = D.n > NEWS.ledgerFrom && (D.ledger || []).length;
+    // 건너뛴 날에 생긴 규칙도 함께 알려 준다
+    const skipped = NEWS.days.filter((d) => d.n > S.prevN && d.n < D.n);
+    const skippedRules = skipped.map((d) => d.short ? d.short : d.note && d.note.length ? '새 낱말: ' + d.note.map((c) => c[0]).join(', ') : '').filter(Boolean);
+    const newLedger = S.prevN < NEWS.ledgerFrom && D.n >= NEWS.ledgerFrom;
+    const ledgerNews = !newLedger && NEWS.days.some((d) => d.n > S.prevN && d.n <= D.n && (d.ledger || []).length);
     const letterHtml = letters.length ? `
       <div class="letters"><b>✉ 독자 편지가 왔어요</b>${letters.map((l) => `<p>"${l.text}"<span>— ${l.from}</span></p>`).join('')}</div>` : '';
-    const queueN = S.queue.length;
+    const skipHtml = skippedRules.length ? `
+      <div class="skipped"><b>그동안 새로 생긴 규칙도 있어요</b><ul>${skippedRules.map((r) => `<li>${r}</li>`).join('')}</ul><span>자세한 설명은 편집 수첩에 있어요.</span></div>` : '';
     sheet(`
-      <div class="morning">
+      <div class="morning${letters.length && skippedRules.length ? ' compact' : ''}">
         <h2>아침 회의</h2>
-        <div class="date">${dayName(D.n)} · ${dateOf(D.n)} · 원고 ${queueN}장${S.practice ? ' · 연습' : ''}</div>
+        <div class="date">${S.practice ? `${D.n}일째 연습` : `${dayName(S.gi + 1)} / ${S.plan.length}일`} · ${dateOf(D.n)} · 원고 ${S.queue.length}장</div>
         ${letterHtml}
+        ${skipHtml}
         <div class="note"><b>오늘의 새 소식</b>${D.rule}</div>
         ${newLedger ? '<p class="newtool">책상에 <b>마을 기록부</b>가 생겼어요. 콕 눌러 펼쳐 보세요.</p>' : ''}
         ${ledgerNews ? '<p class="newtool"><b>마을 기록부</b>에 새로 적힌 줄이 있어요.</p>' : ''}
         ${D.speed > 1 ? '<p class="newtool"><b>오늘은 시계가 빨라요!</b></p>' : ''}
-        ${D.n > 1 ? '<p class="newtool">어제까지의 규칙도 그대로 지켜요.</p>' : ''}
+        ${D.n > 1 ? '<p class="newtool">지난 규칙도 그대로 지켜요.</p>' : ''}
         <button class="btn" id="ok">알겠어요!</button>
       </div>`);
     $('#ok').onclick = () => {
@@ -354,15 +442,15 @@
 
   // 하루 중간에서 이어 하기
   function resumeMid(sv) {
-    const M = sv.mid, D = NEWS.days[M.di];
+    const M = sv.mid;
     resetDesk();
     Object.assign(S, {
       bars: { ...M.bars }, carry: M.carry || [], prevFixed: sv.prevFixed || [], letters: M.letters || [],
       stats: sv.stats || freshStats(), practice: false, lastCrisis: M.lastCrisis ?? -9, level: M.level || S.level,
-      dayCarry: M.startCarry || [], delta: { ...M.delta }, di: M.di, day: D, busy: true,
+      dayCarry: M.startCarry || [], delta: { ...M.delta }, busy: true,
     });
-    const carried = S.dayCarry.map((r) => { const d = NEWS.days[dayIndexOf(r.n)]; return d && d.items[r.i] && d.items[r.i].revised; }).filter(Boolean);
-    S.queue = [...carried, ...D.items];
+    const D = enterDay(M.gi);
+    S.queue = buildQueue(D, S.dayCarry, S.seed + M.gi * 101);
     S.log = M.done.slice(0, S.queue.length).map((d, qi) => {
       const it = S.queue[qi];
       const rec = grade({ it, ...parseItem(it), circled: new Map(d.circled) }, d.stamp);
@@ -371,14 +459,11 @@
     });
     S.idx = S.log.length;
     drawBars();
-    $('#dayLabel').innerHTML = `${dayName(D.n)}<small>${dateOf(D.n)}</small>`;
-    drawRules();
-    $('#ledger').classList.toggle('hide', D.n < NEWS.ledgerFrom);
     setClock(M.elapsed / NEWS.levels[S.level].per / S.queue.length * (D.speed || 1));
     sheet(`
       <div class="morning">
         <h2>이어서 해요</h2>
-        <div class="date">${dayName(D.n)} · ${dateOf(D.n)}</div>
+        <div class="date">${dayName(M.gi + 1)} · ${dateOf(D.n)}</div>
         <p class="newtool">원고 ${S.queue.length}장 가운데 ${S.idx}장을 끝냈어요. ${S.idx + 1}번째 원고부터 이어 해요.</p>
         <button class="btn" id="ok">시작!</button>
       </div>`);
@@ -398,7 +483,7 @@
     const shown = all.slice(-4);
     const more = all.length - shown.length;
     $('#ruleText').innerHTML = (more ? `<li class="more" value="0">앞의 규칙 ${more}개는 수첩에</li>` : '')
-      + shown.map((d) => `<li value="${all.indexOf(d) + 1}"${d.n === n ? ' class="new"' : ''}>${d.short}</li>`).join('');
+      + shown.map((d) => `<li value="${all.indexOf(d) + 1}"${d.n > S.prevN ? ' class="new"' : ''}>${d.short}</li>`).join('');
   }
 
   // ── 기자가 원고를 가져온다 ──
@@ -660,7 +745,7 @@
     let html;
     if (kind === 'note') {
       const rules = daysUntil(n).filter((d) => d.short).map((d) => `<li>${d.short}</li>`).join('');
-      const cards = daysUntil(n).slice().reverse().flatMap((d) => (d.note || []).map((c) => [c, d.n === n]))
+      const cards = daysUntil(n).slice().reverse().flatMap((d) => (d.note || []).map((c) => [c, d.n > S.prevN]))
         .map(([[h, t, e], today]) => `<div class="tipcard${today ? ' today' : ''}"><b>${h}</b>${today ? '<i>오늘</i>' : ''}<br>${t}<em>${e}</em></div>`).join('');
       html = `<h3 class="nbT">편집 수첩</h3><div class="allRules"><b>지켜야 할 규칙</b><ol>${rules}</ol></div>${cards}`;
     } else {
@@ -713,7 +798,7 @@
   const clean = (s) => s.replace(/\{(?:\w+:)?([^>}]+)>[^}]*\}/g, '$1').replace(/\[([^|\]]+)\|[^\]]*\]/g, '$1');
 
   function showResult() {
-    const D = S.day, last = S.di === NEWS.days.length - 1;
+    const D = S.day, last = !S.practice && S.gi === S.plan.length - 1;
     const yFixed = S.prevFixed;
     S.prevFixed = S.log.filter((r) => r.stamp === 'fix' && !r.it.revised && !r.it.cut)
       .map((r) => ({ title: fixedText(r.parts, r.errs, 't'), body: fixedText(r.parts, r.errs, 'b'), by: r.it.by, ad: !!r.it.ad }));
@@ -753,7 +838,7 @@
     if (!S.practice) {
       S.stats.found += foundN; S.stats.total += total; S.stats.days += 1;
       if (perfect) S.stats.perfect += 1;
-      saveProgress(S.di + 1);
+      saveProgress(S.gi + 1);
     }
 
     const deltas = BARS.map(([k, ic, nm]) => {
@@ -763,17 +848,17 @@
     let message = perfect ? '완벽한 신문이에요! 마을 사람들이 믿고 읽겠어요.'
       : printed.some((r) => r.errs.length || r.it.cut) ? '실으면 안 될 글이 신문에 나갔어요. 독자 편지가 올지도 몰라요!'
         : '좋은 신문이에요. 더 꼼꼼히 보면 완벽해질 거예요!';
-    if (last && !S.practice) message += '<br><b>한 달 동안 신문을 다 냈어요!</b>';
+    if (last) message += `<br><b>게임 속 ${modeOf(S.mode).w}주 동안 신문을 다 냈어요!</b>`;
     const letters = last && S.letters.length
       ? `<div class="letters small"><b>✉ 벌써 독자 편지가 왔어요</b>${S.letters.map((l) => `<p>"${l.text}"<span>— ${l.from}</span></p>`).join('')}</div>` : '';
     let btns;
     if (S.practice) btns = '<button class="btn" id="past">다른 날 고르기</button><button class="btn gray" id="home">처음 화면</button>';
     else if (last) btns = '<button class="btn" id="ending">엔딩 보기</button>';
-    else btns = `<button class="btn" id="next">${dayName(NEWS.days[S.di + 1].n)}로</button><button class="btn gray" id="home">쉬었다 하기</button>`;
+    else btns = `<button class="btn" id="next">${dayName(S.gi + 2)}로</button><button class="btn gray" id="home">쉬었다 하기</button>`;
 
     sheet(`
       <div class="news">
-        <div class="masthead"><h1>책갈피 어린이 신문</h1><div class="sub"><span>제${D.n}호</span><span>${dateOf(D.n)}</span></div></div>
+        <div class="masthead"><h1>책갈피 어린이 신문</h1><div class="sub"><span>${S.practice ? '연습' : `제${S.gi + 1}호`}</span><span>${dateOf(D.n)}</span></div></div>
         ${arts ? '' : '<div class="empty">오늘 실린 기사가 하나도 없어요.</div>'}
         <div class="cols">${arts}${boxes}</div>
       </div>
@@ -787,7 +872,7 @@
         <div class="btnrow">${btns}</div>
         ${!S.practice && !last ? '<p class="saved">여기까지 저장했어요. 다음에 「이어 하기」로 계속해요.</p>' : ''}
       </div>`, 'result');
-    if ($('#next')) $('#next').onclick = () => startDay(S.di + 1);
+    if ($('#next')) $('#next').onclick = () => startDay(S.gi + 1);
     if ($('#home')) $('#home').onclick = title;
     if ($('#past')) $('#past').onclick = pastDays;
     if ($('#ending')) $('#ending').onclick = showEnding;
@@ -803,7 +888,7 @@
     store({ ...sv, endings: [...got] });
     sheet(`
       <div class="ending">
-        <div class="masthead"><h1>책갈피 어린이 신문</h1><div class="sub"><span>한 달 기념호</span><span>${dateOf(NEWS.days[NEWS.days.length - 1].n)}</span></div></div>
+        <div class="masthead"><h1>책갈피 어린이 신문</h1><div class="sub"><span>게임 속 ${modeOf(S.mode).w}주 · 마지막 호</span><span>${dateOf(NEWS.days[NEWS.days.length - 1].n)}</span></div></div>
         <div class="endStamp">${E.name}</div>
         <p class="endText">${E.text}</p>
         <div class="endStats">
