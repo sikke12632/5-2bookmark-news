@@ -56,6 +56,8 @@ window.ART = (() => {
     sgi: { skin: '#f3d1b4', hair: '#3b2a3e', shirt: '#8a62b0', collar: '#f6e9ff' },
     wkg: { skin: '#f1c49c', hair: '#2a2a2a', shirt: '#2f4a6e', collar: '#ffffff' },
     chk: { skin: '#f4d2b0', hair: '#7a4a2a', shirt: '#2f8a8a', collar: '#e9fbf6' },
+    dan: { skin: '#f8d6b8', hair: '#4a2e22', shirt: '#e8a23a', collar: '#fff6dc' },
+    tip: { skin: '#e9c49a', hair: '#3a2e28', shirt: '#5a4a6a', collar: '#5a4a6a' },
   };
   function reporter(id, badge = '기자') {
     const L = LOOKS[id];
@@ -94,6 +96,27 @@ window.ART = (() => {
         <rect x="70" y="180" width="60" height="38" rx="6" fill="#3a3a3a"/>
         <rect x="76" y="174" width="18" height="8" rx="2" fill="#3a3a3a"/>
         <circle cx="100" cy="199" r="13" fill="#6a7a8a" stroke="#ddd" stroke-width="3"/><circle cx="96" cy="195" r="3" fill="#fff" opacity=".8"/>`);
+    if (id === 'dan') return svg(`
+        <path d="M54 100 Q50 52 100 50 Q150 52 146 100 L136 94 Q128 72 100 72 Q72 72 64 94 Z" fill="${L.hair}"/>
+        <circle cx="46" cy="84" r="14" fill="${L.hair}"/><circle cx="154" cy="84" r="14" fill="${L.hair}"/>
+        <circle cx="56" cy="78" r="4" fill="#e85a6a"/><circle cx="144" cy="78" r="4" fill="#e85a6a"/>
+        <path d="M86 124 Q100 138 114 124 Z" fill="#c4423a"/>
+        <rect x="132" y="150" width="34" height="44" rx="3" fill="#fffaf0" stroke="#c9b48a" stroke-width="2" transform="rotate(8 149 172)"/>
+        <path d="M138 162 h22 M138 170 h22 M138 178 h16" stroke="#9ab" stroke-width="2" transform="rotate(8 149 172)"/>`);
+    if (id === 'tip') return `<svg viewBox="0 0 200 220" xmlns="http://www.w3.org/2000/svg">
+        <path d="M30 220 Q30 160 100 152 Q170 160 170 220 Z" fill="${L.shirt}"/>
+        <rect x="108" y="176" width="42" height="20" rx="3" fill="#fff" stroke="#c9b48a"/>
+        <text x="129" y="191" font-size="12" text-anchor="middle" fill="#a3402e" font-family="JKTitle, serif">${badge}</text>
+        <ellipse cx="100" cy="102" rx="48" ry="50" fill="${L.skin}"/>
+        <ellipse cx="80" cy="100" rx="5" ry="7" fill="#2a211b"/><ellipse cx="120" cy="100" rx="5" ry="7" fill="#2a211b"/>
+        <circle cx="82" cy="98" r="1.8" fill="#fff"/><circle cx="122" cy="98" r="1.8" fill="#fff"/>
+        <path d="M46 112 Q100 104 154 112 L156 150 Q100 162 44 150 Z" fill="#c4423a"/>
+        <path d="M54 124 h92 M52 138 h96" stroke="#a3302a" stroke-width="3"/>
+        <path d="M44 120 l-16 -4 M44 126 l-16 2 M156 120 l16 -4 M156 126 l16 2" stroke="#3a2e28" stroke-width="2" stroke-linecap="round"/>
+        <path d="M34 82 Q100 70 166 82 L160 90 Q100 80 40 90 Z" fill="#4a3a30"/>
+        <path d="M56 82 Q58 34 100 32 Q142 34 144 82 Z" fill="#5e4a3c"/>
+        <path d="M58 72 Q100 64 142 72 L142 80 Q100 72 58 80 Z" fill="#2f2620"/>
+      </svg>`;
     return svg(`
       <path d="M48 116 Q40 56 100 46 Q160 56 152 116 L142 116 Q140 76 100 70 Q64 74 58 116 Z" fill="${L.hair}"/>
       <circle cx="78" cy="104" r="13" fill="none" stroke="#3a3a3a" stroke-width="3"/><circle cx="122" cy="104" r="13" fill="none" stroke="#3a3a3a" stroke-width="3"/>

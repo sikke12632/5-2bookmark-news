@@ -14,7 +14,7 @@ HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = sys.argv[1] if len(sys.argv) > 1 else '.'
 
 texts = []
-for pat in ['index.html', 'style.css', 'js/*.js']:
+for pat in ['index.html', 'style.css', 'js/*.js', 'js/days/*.js']:
     for p in glob.glob(os.path.join(HERE, pat)):
         with open(p, encoding='utf-8') as f:
             texts.append(f.read())
