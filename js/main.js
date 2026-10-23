@@ -47,6 +47,19 @@
   const KEY = 'bookmark-news-v1';
   function load() { try { return JSON.parse(localStorage.getItem(KEY)) || null; } catch (e) { return null; } }
   function store(o) { try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) {} }
+  // 하루 중간 저장: 원고 한 장에 도장을 찍을 때마다 (탭을 닫아도 그 원고부터 이어 한다)
+  function saveMid() {
+    if (S.practice || !S.day) return;
+    const sv = load();
+    if (!sv) return;
+    sv.mid = {
+      di: S.di, startCarry: S.dayCarry, bars: S.bars, delta: S.delta, carry: S.carry, letters: S.letters,
+      lastCrisis: S.lastCrisis, level: S.level,
+      elapsed: Math.min(S.total, (performance.now() - S.start) / 1000),
+      done: S.log.map((r) => ({ stamp: r.stamp, circled: [...(r.circled || [])] })),
+    };
+    store(sv);
+  }
   function saveProgress(next) {
     const old = load() || {};
     store({
@@ -194,7 +207,7 @@
     S.day = null;
     const sv = load();
     if (sv && sv.level) S.level = sv.level;
-    S.bars = sv && sv.next < NEWS.days.length ? { ...sv.bars } : fresh();
+    S.bars = sv && sv.next < NEWS.days.length ? { ...(sv.mid && sv.mid.di === sv.next ? sv.mid.bars : sv.bars) } : fresh();
     drawBars();
     const lv = Object.entries(NEWS.levels).map(([k, L]) =>
       `<button class="lv${k === S.level ? ' on' : ''}" data-lv="${k}"><b>${L.name}</b><span>${L.desc}</span></button>`).join('');
@@ -203,7 +216,10 @@
     let btns;
     if (!sv) btns = '<button class="btn" id="go">편집장 자리에 앉기</button>';
     else if (done) btns = `<p class="intro small">한 달 신문을 다 냈어요! 다른 엔딩도 찾아볼까요?</p><button class="btn" id="restart">처음부터 다시 하기</button>`;
-    else btns = `<button class="btn" id="cont">이어 하기 · ${dayName(NEWS.days[sv.next].n)}</button> <button class="btn gray" id="restart">처음부터</button>`;
+    else {
+      const mid = sv.mid && sv.mid.di === sv.next ? ` ${sv.mid.done.length + 1}번째 원고부터` : '';
+      btns = `<button class="btn" id="cont">이어 하기 · ${dayName(NEWS.days[sv.next].n)}${mid}</button> <button class="btn gray" id="restart">처음부터</button>`;
+    }
     const anyPast = ALL || (sv && sv.reached > 0);
     sheet(`
       <div style="width:780px">
@@ -229,6 +245,7 @@
     };
     if ($('#go')) $('#go').onclick = begin;
     if ($('#cont')) $('#cont').onclick = () => {
+      if (sv.mid && sv.mid.di === sv.next) { resumeMid(sv); return; }
       Object.assign(S, { bars: { ...sv.bars }, carry: sv.carry || [], prevFixed: sv.prevFixed || [], letters: sv.letters || [], stats: sv.stats || freshStats(), practice: false, lastCrisis: sv.lastCrisis ?? -9 });
       drawBars();
       startDay(sv.next);
@@ -278,7 +295,7 @@
     const letters = S.letters;
     S.letters = [];
     const carried = S.carry.map((r) => { const d = NEWS.days[dayIndexOf(r.n)]; return d && d.items[r.i] && d.items[r.i].revised; }).filter(Boolean);
-    Object.assign(S, { di, day: D, queue: [...carried, ...D.items], idx: 0, log: [], delta: {}, busy: true, carry: [] });
+    Object.assign(S, { di, day: D, queue: [...carried, ...D.items], idx: 0, log: [], delta: {}, busy: true, dayCarry: S.carry, carry: [] });
     $('#dayLabel').innerHTML = `${dayName(D.n)}<small>${dateOf(D.n)}</small>`;
     drawRules();
     $('#ledger').classList.toggle('hide', D.n < NEWS.ledgerFrom);
@@ -329,6 +346,46 @@
       if (newLedger || ledgerNews) { $('#ledger').classList.add('fresh'); setTimeout(() => $('#ledger').classList.remove('fresh'), 2600); }
       S.total = NEWS.levels[S.level].per * S.queue.length / (D.speed || 1);
       S.start = performance.now(); S.running = true; S.lastTick = -1;
+      saveMid();
+      requestAnimationFrame(loop);
+      nextItem();
+    };
+  }
+
+  // 하루 중간에서 이어 하기
+  function resumeMid(sv) {
+    const M = sv.mid, D = NEWS.days[M.di];
+    resetDesk();
+    Object.assign(S, {
+      bars: { ...M.bars }, carry: M.carry || [], prevFixed: sv.prevFixed || [], letters: M.letters || [],
+      stats: sv.stats || freshStats(), practice: false, lastCrisis: M.lastCrisis ?? -9, level: M.level || S.level,
+      dayCarry: M.startCarry || [], delta: { ...M.delta }, di: M.di, day: D, busy: true,
+    });
+    const carried = S.dayCarry.map((r) => { const d = NEWS.days[dayIndexOf(r.n)]; return d && d.items[r.i] && d.items[r.i].revised; }).filter(Boolean);
+    S.queue = [...carried, ...D.items];
+    S.log = M.done.slice(0, S.queue.length).map((d, qi) => {
+      const it = S.queue[qi];
+      const rec = grade({ it, ...parseItem(it), circled: new Map(d.circled) }, d.stamp);
+      rec.circled = d.circled;
+      return rec;
+    });
+    S.idx = S.log.length;
+    drawBars();
+    $('#dayLabel').innerHTML = `${dayName(D.n)}<small>${dateOf(D.n)}</small>`;
+    drawRules();
+    $('#ledger').classList.toggle('hide', D.n < NEWS.ledgerFrom);
+    setClock(M.elapsed / NEWS.levels[S.level].per / S.queue.length * (D.speed || 1));
+    sheet(`
+      <div class="morning">
+        <h2>이어서 해요</h2>
+        <div class="date">${dayName(D.n)} · ${dateOf(D.n)}</div>
+        <p class="newtool">원고 ${S.queue.length}장 가운데 ${S.idx}장을 끝냈어요. ${S.idx + 1}번째 원고부터 이어 해요.</p>
+        <button class="btn" id="ok">시작!</button>
+      </div>`);
+    $('#ok').onclick = () => {
+      closeSheet();
+      S.total = NEWS.levels[S.level].per * S.queue.length / (D.speed || 1);
+      S.start = performance.now() - M.elapsed * 1000; S.running = true; S.lastTick = -1;
       requestAnimationFrame(loop);
       nextItem();
     };
@@ -503,6 +560,7 @@
     SND.play('stamp');
 
     const rec = grade(C, k);
+    rec.circled = [...C.circled];
     S.log.push(rec);
     C.done = true;
     const hasErr = rec.errs.length > 0, isCut = !!C.it.cut;
@@ -527,6 +585,7 @@
     }
     if (k !== 'print' && rec.wrong.length) add('heart', -2 * rec.wrong.length);
     bump(ch);
+    saveMid();
 
     // 기자 반응
     const ok = k === rec.rightStamp && (k !== 'fix' || (!rec.missed.length && !rec.wrong.length && !rec.wrongWhy.length));
