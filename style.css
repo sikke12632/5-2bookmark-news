@@ -358,3 +358,16 @@ body.evening .sun { fill: #ff7a4a; }
 .morning.compact .letters p { margin-top: 2px; }
 .morning.compact .note { font-size: 19px; padding: 14px; margin-bottom: 12px; }
 .morning.compact .newtool { margin: -4px 0 10px; font-size: 15px; }
+
+/* 저장 안내, 원고 날짜, 기록부 기준 날짜 */
+.saveNote { font-size: 14px; line-height: 1.5; color: #6a7a5a; text-align: center; background: #f1f5ea; border-radius: 8px; padding: 8px 12px; margin: 14px 0 0; word-break: keep-all; }
+.pdate { color: #a3402e; font-weight: bold; }
+.lgDate { margin: -6px 0 8px; font-size: 15px; color: #a3402e; }
+.morning .note small { display: block; font-size: 17px; color: #6a5a3a; margin-top: 6px; }
+.setupBox .masthead { margin-bottom: 10px; padding-bottom: 6px; }
+.setupBox .masthead h1 { font-size: 44px; }
+.setupBox .intro { margin-bottom: 8px; }
+.setupBox .levels { margin-bottom: 10px; }
+.setupBox .pickT { margin: 2px 0 6px; }
+.setupBox .saveNote { margin-top: 10px; }
+.setupBox .titleFoot { margin-top: 10px; }

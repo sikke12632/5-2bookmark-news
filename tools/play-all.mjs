@@ -20,6 +20,7 @@ export default async function (t) {
       await t.eval(`document.getElementById('ca').click()`);
       await t.waitFor(`document.getElementById('ok')`);
     }
+    plan.push(...JSON.parse(await t.eval(`JSON.stringify(__news.S.queue.map(it => it.title))`)));
     await t.eval(`document.getElementById('ok').click()`);
     for (;;) {
       await t.waitFor(`document.querySelector('.paper.live') || document.querySelector('.result')`, 20000);
@@ -48,12 +49,12 @@ export default async function (t) {
     await t.sleep(300);
     const score = await t.eval(`document.querySelector('.score').textContent`);
     const bars = await t.eval(`JSON.stringify(__news.S.bars)`);
-    plan.push(await t.eval(`__news.S.day.n`));
-    console.log(`${day}일째(원래 ${plan[plan.length - 1]}일째) ${score} ${bars}`);
+    console.log(`${day}일째 ${score} ${bars}`);
     if (day < LEN) await t.eval(`document.getElementById('next').click()`);
   }
   await t.eval(`document.getElementById('ending').click()`); await t.sleep(800);
-  console.log('뽑힌 날:', plan.join(','));
+  console.log('나온 기사:', plan.length, '장, 겹친 기사:', plan.length - new Set(plan).size, '장');
+  if (OUT) (await import('node:fs')).writeFileSync(`${OUT}/titles-${MODE}-${LEN}-${Date.now()}.txt`, plan.join(String.fromCharCode(10)));
   console.log('엔딩:', await t.eval(`document.querySelector('.endStamp').textContent`));
   if (crises.length) console.log('위기:', crises.join(', '));
   if (OUT) await t.shot(`${OUT}/엔딩-${MODE}-${LEN}.png`);
