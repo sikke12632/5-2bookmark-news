@@ -371,3 +371,8 @@ body.evening .sun { fill: #ff7a4a; }
 .setupBox .pickT { margin: 2px 0 6px; }
 .setupBox .saveNote { margin-top: 10px; }
 .setupBox .titleFoot { margin-top: 10px; }
+
+/* 원고·기사 제목은 작게 써도 획이 뭉치지 않는 본문 글꼴 굵은 글씨로 (송명은 '텔'처럼 획이 많은 글자가 작으면 깨져 보임) */
+.ptitle, .art h3 { font-family: 'JKBody', 'Malgun Gothic', sans-serif; font-weight: 700; letter-spacing: -0.5px; }
+.ptitle { font-size: 30px; }
+.ptitle.long { font-size: 26px; }
